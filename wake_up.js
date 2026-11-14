@@ -403,6 +403,12 @@ async function runWakeUp() {
   console.log("\n==========================");
   console.log("开始自动唤醒");
   console.log("==========================\n");
+  
+  console.log("唤醒诊断：", {
+  time: new Date().toISOString(),
+  timelinePath: TIMELINE_PATH,
+  fileExists: fs.existsSync(TIMELINE_PATH)
+});
 
   const messages = loadTimelineMessages();
   if (!messages) return;
