@@ -65,5 +65,4 @@ function parseChatCompletionResponse(text, contentType = "") {
   }
   return payload;
 }
-
-module.exports = { parseChatCompletionResponse, parseSseChatCompletion };
+module.exports = { parseChatCompletionResponse, parseSseChatCompletion, stripThinkingTags };
