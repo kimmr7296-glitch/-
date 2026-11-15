@@ -1,7 +1,24 @@
 function contentText(value) {
   if (typeof value === "string") return value;
   if (!Array.isArray(value)) return "";
-  return value.map(part => typeof part === "string" ? part : String(part?.text || part?.content || "")).join("");
+  return value
+    .filter(part => {
+      if (!part || typeof part !== "object") return true;
+      const type = String(part.type || "").toLowerCase();
+      return !/^(?:thinking|reasoning)$/.test(type);
+    })
+    .map(part => typeof part === "string" ? part : String(part?.text || part?.content || ""))
+    .join("");
+}
+
+function stripThinkingTags(text) {
+  // 完整闭合的  块
+  text = text.replace(/<(?:thinking|think|reasoning)\b[^>]*>[\s\S]*?<\/(?:thinking|think|reasoning)\s*>/gi, "");
+  // 没闭合的开标签：只删标签本身，不砍后面正文
+  text = text.replace(/<(?:thinking|think|reasoning)\b[^>]*>/gi, "");
+  // 残留的闭合标签
+  text = text.replace(/<\/(?:thinking|think|reasoning)\s*>/gi, "");
+  return text.trim();
 }
 
 function parseSseChatCompletion(text) {
@@ -24,7 +41,7 @@ function parseSseChatCompletion(text) {
     if (delta) streamed += delta;
     else if (message || legacy) completed = message || legacy;
   }
-  const content = streamed || completed;
+  const content = stripThinkingTags(streamed || completed);
   if (!content && !lastPayload) throw new Error("SSE 响应中没有可读取的 data JSON");
   return {
     ...(lastPayload || {}),
@@ -34,12 +51,19 @@ function parseSseChatCompletion(text) {
 
 function parseChatCompletionResponse(text, contentType = "") {
   const raw = String(text || "");
-  // 批注 2026-08-10：官方在 stream=false 时返回 JSON；少数兼容端仍会回 data: SSE。
-  // 先按真实响应识别再解析，保护官方 JSON 快路径，也避免兼容端让整次唤醒误报“不是 JSON”。
   if (/text\/event-stream/i.test(contentType) || /^\s*(?:event:.*\r?\n)?data:/i.test(raw)) {
     return parseSseChatCompletion(raw);
   }
-  return JSON.parse(raw);
+  const payload = JSON.parse(raw);
+  // 非流式响应也过滤一遍
+  if (Array.isArray(payload?.choices)) {
+    for (const choice of payload.choices) {
+      if (choice?.message?.content) {
+        choice.message.content = stripThinkingTags(contentText(choice.message.content));
+      }
+    }
+  }
+  return payload;
 }
 
 module.exports = { parseChatCompletionResponse, parseSseChatCompletion };
