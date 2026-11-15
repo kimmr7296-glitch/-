@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const { buildNtfyPayload } = require("./ntfy_priority");
 const { ensureDataDir, runtimeDirectory, runtimeFile } = require("./runtime_paths");
-const { parseChatCompletionResponse } = require("./upstream_response");
+const { parseChatCompletionResponse, stripThinkingTags } = require("./upstream_response");
 const {
   formatDateTimeInTimeZone,
   getDatePartsInTimeZone,
@@ -186,6 +186,7 @@ function normalizeContentToText(content) {
         if (typeof part === "string") return part;
         if (!part || typeof part !== "object") return "";
         const type = typeof part.type === "string" ? part.type.toLowerCase() : "";
+        if (/^(?:thinking|reasoning)$/.test(type)) return "";
         if (type === "text" || type === "input_text") return part.text || part.content || "";
         if (part.image_url || type.includes("image")) return "[图片]";
         if (part.file || type.includes("file")) return "[文件]";
@@ -509,7 +510,9 @@ ${historyText}`
     throw new Error(`模型请求失败（HTTP ${response.status}）：${responseText.slice(0, 300)}`);
   }
 
-  const rawAiText = normalizeContentToText(data.choices?.[0]?.message?.content).trim();
+  const rawAiText = stripThinkingTags(
+  normalizeContentToText(data.choices?.[0]?.message?.content)
+).trim();
   console.log("\nWake Result Summary:\n");
   console.log(JSON.stringify({ choices: Array.isArray(data.choices) ? data.choices.length : 0, ai_text_chars: rawAiText.length }));
 
